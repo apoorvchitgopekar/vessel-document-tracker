@@ -1,0 +1,552 @@
+<title>Vessel Document Tracking Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&display=swap">
+<style>
+/* Layout: toolbar header → filter row → 4 KPI tiles → heatmap → two-up charts → summary table → detail table, one 1180px column */
+:root{
+  --bg:#f3f6f9; --surface:#fcfdfe; --ink:#0d1117; --ink-2:#4e5a66; --muted:#8a949e;
+  --grid-line:#e3e7eb; --hairline:rgba(13,23,37,.10); --accent:#1c5cab; --accent-soft:#e3edf8;
+  --good:#0ca30c; --good-text:#006300; --crit:#d03b3b; --crit-text:#b32020; --warn-text:#9a5b00;
+  --cell-recv:#149114; --cell-pend:#c43a3a;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#4a3aa7; --s8:#e34948;
+  --shadow:0 1px 2px rgba(13,23,37,.05),0 4px 14px rgba(13,23,37,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0c1014; --surface:#151b22; --ink:#f0f4f8; --ink-2:#b9c4cf; --muted:#8a949e;
+    --grid-line:#242c35; --hairline:rgba(255,255,255,.10); --accent:#3987e5; --accent-soft:#17283c;
+    --good:#0ca30c; --good-text:#2fbf2f; --crit:#e05252; --crit-text:#ef6e6e; --warn-text:#e0a23c;
+    --cell-recv:#1d7a1d; --cell-pend:#a93636;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0c1014; --surface:#151b22; --ink:#f0f4f8; --ink-2:#b9c4cf; --muted:#8a949e;
+  --grid-line:#242c35; --hairline:rgba(255,255,255,.10); --accent:#3987e5; --accent-soft:#17283c;
+  --good:#0ca30c; --good-text:#2fbf2f; --crit:#e05252; --crit-text:#ef6e6e; --warn-text:#e0a23c;
+  --cell-recv:#1d7a1d; --cell-pend:#a93636;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.35);
+  color-scheme:dark;
+}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding-inline:16px;}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 48px;display:flex;flex-direction:column;gap:16px;}
+h1,h2,h3{font-family:"Archivo",system-ui,sans-serif;text-wrap:balance;margin:0;}
+h1{font-size:clamp(22px,3.4vw,30px);font-weight:700;letter-spacing:-.01em;}
+.lede{color:var(--ink-2);max-width:68ch;margin:6px 0 0;}
+.topbar{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;}
+.toolbtns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--hairline);background:var(--surface);
+  color:var(--ink);border-radius:8px;padding:7px 12px;font:600 13px/1 system-ui,sans-serif;cursor:pointer;text-decoration:none;}
+.btn:hover{border-color:var(--accent);}
+.btn svg{width:14px;height:14px;flex:none;}
+.btn:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+#refreshBtn.spinning svg{animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#refreshBtn.spinning svg{animation:none}}
+.srcstate{display:inline-flex;align-items:center;gap:6px;font:600 12px/1 system-ui,sans-serif;color:var(--ink-2);
+  padding:7px 10px;border-radius:8px;background:var(--surface);border:1px solid var(--hairline);}
+.srcstate .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);}
+.srcstate.live .dot{background:var(--good);}
+.srcstate.snap .dot{background:var(--warn-text);}
+.filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:var(--ink-2);font-weight:600;font-size:13px;}
+.filters svg{width:15px;height:15px;}
+select{appearance:none;-webkit-appearance:none;border:1px solid var(--hairline);background:var(--surface);color:var(--ink);
+  border-radius:8px;padding:7px 30px 7px 12px;font:600 13px/1.2 system-ui,sans-serif;cursor:pointer;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23898781' stroke-width='1.6' stroke-linecap='round'/></svg>");
+  background-repeat:no-repeat;background-position:right 10px center;}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px;}
+.kpi{background:var(--surface);border:1px solid var(--hairline);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:2px;min-width:0;}
+.kpi .top{display:flex;justify-content:space-between;align-items:center;color:var(--ink-2);font-weight:600;font-size:13px;gap:8px;}
+.kpi .top svg{width:18px;height:18px;color:var(--accent);flex:none;}
+.kpi .num{font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:4px;}
+.kpi .sub{font-size:12.5px;font-weight:600;}
+.kpi .sub2{font-size:12px;color:var(--muted);}
+.sub.pos{color:var(--good-text);} .sub.neg{color:var(--crit-text);}
+.card{background:var(--surface);border:1px solid var(--hairline);border-radius:12px;box-shadow:var(--shadow);padding:18px;min-width:0;}
+.card header{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:12px;}
+.card h2{font-size:16px;font-weight:600;}
+.rowcount{font-size:12px;color:var(--muted);white-space:nowrap;}
+.charts2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media (max-width:900px){.charts2{grid-template-columns:1fr;}}
+/* heatmap */
+.hm-scroll{overflow-x:auto;padding-bottom:4px;}
+.hm{display:grid;gap:3px;align-items:stretch;}
+.hm .rowlab{display:flex;flex-direction:column;justify-content:center;padding-right:10px;min-width:0;}
+.hm .rowlab b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hm .rowlab span{font-size:11px;color:var(--muted);white-space:nowrap;}
+.hm .colhead{position:relative;height:112px;}
+.hm .colhead span{position:absolute;bottom:4px;left:50%;transform:rotate(-46deg);transform-origin:left bottom;
+  white-space:nowrap;font-size:11px;color:var(--ink-2);}
+.hm .cell{height:30px;border-radius:4px;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:11px;font-weight:700;cursor:default;}
+.hm .cell.r{background:var(--cell-recv);} .hm .cell.p{background:var(--cell-pend);}
+.hm .cell:hover{outline:2px solid var(--ink);outline-offset:1px;}
+.legend{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:14px;font-size:12.5px;color:var(--ink-2);}
+.legend .it{display:inline-flex;align-items:center;gap:6px;}
+.legend .sw{width:12px;height:12px;border-radius:3px;flex:none;}
+svg.chart{width:100%;height:auto;display:block;}
+svg.chart text{font:11px system-ui,sans-serif;fill:var(--ink-2);}
+svg.chart .tick{font-variant-numeric:tabular-nums;fill:var(--muted);}
+svg.chart .gl{stroke:var(--grid-line);stroke-width:1;}
+svg.chart .ax{stroke:var(--hairline);stroke-width:1;}
+svg.chart .dlab{font-weight:700;fill:var(--ink);}
+svg.chart .dsub{fill:var(--muted);font-size:10px;}
+.tblwrap{overflow:auto;}
+.detailwrap{max-height:430px;}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:640px;}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;text-align:left;
+  padding:8px 12px;border-bottom:1px solid var(--grid-line);white-space:nowrap;}
+.detailwrap th{position:sticky;top:0;background:var(--surface);z-index:1;}
+td{padding:9px 12px;border-bottom:1px solid var(--grid-line);white-space:nowrap;}
+td.n{text-align:right;font-variant-numeric:tabular-nums;} th.n{text-align:right;}
+tr.total td{font-weight:700;border-top:2px solid var(--hairline);border-bottom:none;}
+.pend-n{color:var(--crit-text);font-weight:700;} .recv-n{font-weight:600;}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;}
+.pill.r{background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--good-text);}
+.pill.p{background:color-mix(in srgb,var(--crit) 13%,transparent);color:var(--crit-text);}
+.meter{display:inline-block;width:72px;height:6px;border-radius:3px;background:var(--grid-line);vertical-align:middle;margin-left:8px;overflow:hidden;}
+.meter i{display:block;height:100%;background:var(--accent);border-radius:3px;}
+.empty{color:var(--muted);text-align:center;padding:28px 0;}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--ink);color:var(--bg);padding:7px 10px;border-radius:7px;
+  font-size:12px;line-height:1.45;box-shadow:var(--shadow);opacity:0;transition:opacity .08s;max-width:260px;white-space:normal;}
+#tip b{display:block;}
+.errbar{display:none;background:color-mix(in srgb,var(--crit) 12%,var(--surface));border:1px solid var(--crit);
+  border-radius:10px;padding:10px 14px;font-size:13px;color:var(--ink);}
+footer.note{color:var(--muted);font-size:12px;text-align:center;}
+footer.note a{color:var(--accent);}
+</style>
+
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>Vessel Document Tracking Dashboard</h1>
+      <p class="lede">Track shipping document completion status for inbound vessels to Mombasa, monitor received vs pending documents, and identify bottlenecks across the required document types.</p>
+    </div>
+    <div class="toolbtns">
+      <a class="btn" id="srcLink" target="_blank" rel="noopener" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
+        Source Sheet</a>
+      <button class="btn" id="refreshBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+        Refresh</button>
+      <span class="srcstate" id="srcState"><span class="dot"></span><span id="srcStateTxt">Loading…</span></span>
+    </div>
+  </div>
+
+  <div class="errbar" id="errBar"></div>
+
+  <div class="filters">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54z"/></svg>
+    Filters
+    <select id="etaFilter" aria-label="Filter by ETA to Mombasa">
+      <option value="all">ETA to Mombasa: All time</option>
+      <option value="30">ETA: Next 30 days</option>
+      <option value="60">ETA: Next 60 days</option>
+      <option value="90">ETA: Next 90 days</option>
+    </select>
+    <select id="vesselFilter" aria-label="Filter by vessel">
+      <option value="all">Vessel: All</option>
+    </select>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section class="card">
+    <header><h2>Document Status Heatmap (Vessel × Document Type)</h2></header>
+    <div class="hm-scroll"><div class="hm" id="heatmap"></div></div>
+    <div class="legend">
+      <span class="it"><span class="sw" style="background:var(--cell-recv)"></span>✓ Received</span>
+      <span class="it"><span class="sw" style="background:var(--cell-pend)"></span>– Pending</span>
+    </div>
+  </section>
+
+  <div class="charts2">
+    <section class="card">
+      <header><h2>Document Completion % by Vessel</h2></header>
+      <div id="complChart"></div>
+    </section>
+    <section class="card">
+      <header><h2>Incoming Product Quantity by Vessel (MT)</h2></header>
+      <div id="qtyChart"></div>
+      <div class="legend" id="qtyLegend"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <header><h2>Vessel Summary</h2><span class="rowcount" id="sumCount"></span></header>
+    <div class="tblwrap" id="summaryTbl"></div>
+  </section>
+
+  <section class="card">
+    <header><h2>Document Status Detail</h2><span class="rowcount" id="detCount"></span></header>
+    <div class="tblwrap detailwrap" id="detailTbl"></div>
+  </section>
+
+  <footer class="note">Data is read live from the <a id="srcLink2" target="_blank" rel="noopener" href="#">Google Sheet</a> each time this page opens, and re-checked every 5 minutes while it stays open. <span id="updatedAt"></span></footer>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+'use strict';
+/* ---------- config ---------- */
+const SHEET_ID = '15rvjYlK06D8A-8SEuiyEd2uX8AiPsu3szUOJnCGnCpM';
+const GID = '0';
+const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit?gid=${GID}#gid=${GID}`;
+const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${GID}&headers=1&tqx=out:csv`;
+const REFRESH_MS = 10 * 60 * 1000;
+
+/* Snapshot taken at build time — used only if the sheet cannot be reached from this context. */
+const SNAPSHOT_TIME = '2026-10-07';
+const SNAPSHOT_CSV = `Vessel Name,ETA - To Mombasa,PRODUCT,Quantity In MT,Contract/ PI ,Draft Survey Report,Draft Bill of Lading,Commercial Invoice,Packing List,Certificate of Origin ,Final Stowage Plan,Mate's Receipt,Marine Cargo Insurance ,LOI / Original BL,Letter Of Authority,Accepted LOI,Cargo Manifest (Customs),KPA Release,Sampling & Analysis Ceritificate,Manufacturer Quality Report,Cleanliness Certificate
+MV AVERY POINT,15th November,Clinker,50000,RECEIVED,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING
+IMI Clinker - 2,5th December,Clinker,50000,RECEIVED,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING
+IMI Clinker - 3,15th December,Clinker,50000,RECEIVED,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING
+HMT Clinker,20th November,Clinker,50000,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING
+HMT Coal,16th December,Coal,50000,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING,PENDING
+MV Yangtze Dawn,25th October,Clinker,47000,RECEIVED,RECEIVED,RECEIVED,RECEIVED,RECEIVED,RECEIVED,RECEIVED,RECEIVED,RECEIVED,RECEIVED,RECEIVED,RECEIVED,PENDING,PENDING,RECEIVED,RECEIVED,RECEIVED`;
+
+/* ---------- data loading ---------- */
+function parseCSV(text){
+  const rows=[]; let row=[], cell='', inQ=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(inQ){
+      if(ch==='"'){ if(text[i+1]==='"'){cell+='"';i++;} else inQ=false; }
+      else cell+=ch;
+    } else if(ch==='"') inQ=true;
+    else if(ch===','){ row.push(cell); cell=''; }
+    else if(ch==='\n'||ch==='\r'){
+      if(ch==='\r'&&text[i+1]==='\n') i++;
+      row.push(cell); rows.push(row); row=[]; cell='';
+    } else cell+=ch;
+  }
+  if(cell!==''||row.length){ row.push(cell); rows.push(row); }
+  return rows;
+}
+function gvizToGrid(resp){
+  const t=resp.table;
+  const head=t.cols.map(c=>(c.label||'').trim());
+  const rows=t.rows.map(r=>(r.c||[]).map(c=>c==null?'':(c.v==null?'':c.v)));
+  return [head,...rows];
+}
+function loadViaFetch(){
+  return fetch(CSV_URL+'&cb='+Date.now(),{cache:'no-store'}).then(r=>{
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.text();
+  }).then(parseCSV);
+}
+function loadViaJSONP(){
+  return new Promise((resolve,reject)=>{
+    const cb='__gvizCB'+Math.floor(Math.random()*1e9);
+    const s=document.createElement('script');
+    const timer=setTimeout(()=>{cleanup();reject(new Error('timeout'));},12000);
+    function cleanup(){clearTimeout(timer);delete window[cb];s.remove();}
+    window[cb]=resp=>{cleanup();try{resolve(gvizToGrid(resp));}catch(e){reject(e);}};
+    s.onerror=()=>{cleanup();reject(new Error('script blocked'));};
+    s.src=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${GID}&headers=1&tqx=out:json;responseHandler:${cb}&cb=${Date.now()}`;
+    document.head.appendChild(s);
+  });
+}
+
+/* ---------- normalization ---------- */
+const MONTHS=['january','february','march','april','may','june','july','august','september','october','november','december'];
+const clean=s=>String(s==null?'':s).replace(/\s+/g,' ').trim();
+function parseEta(raw){
+  const r=clean(raw); if(!r) return null;
+  const ym=r.match(/\b(20\d{2})\b/);
+  let day=null, mi=-1;
+  const dm=r.match(/(\d{1,2})\s*(?:st|nd|rd|th)?\s+([A-Za-z]+)/) || null;
+  const md=r.match(/([A-Za-z]+)\s+(\d{1,2})\s*(?:st|nd|rd|th)?/) || null;
+  if(dm){ day=+dm[1]; mi=MONTHS.findIndex(m=>m.startsWith(dm[2].toLowerCase())); }
+  if(mi<0&&md){ day=+md[2]; mi=MONTHS.findIndex(m=>m.startsWith(md[1].toLowerCase())); }
+  if(mi<0||!day||day>31) return null;
+  const now=new Date();
+  let y=ym?+ym[1]:now.getFullYear();
+  let d=new Date(y,mi,day);
+  if(!ym && d.getTime()<now.getTime()-120*86400000) d=new Date(y+1,mi,day);
+  return d;
+}
+const fmtDate=d=>d?d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+function categoryFor(doc){
+  const n=doc.toLowerCase();
+  if(/contract|invoice|packing|\bpi\b/.test(n)) return 'Commercial';
+  if(/survey|stowage/.test(n)) return 'Survey & Stowage';
+  if(/bill of lading|mate/.test(n)) return 'Shipping';
+  if(/insurance|loi|authority/.test(n)) return 'Insurance & Authorization';
+  if(/manifest|kpa|customs|release/.test(n)) return 'Customs & Port';
+  if(/cert|quality|cleanliness|sampling|origin/.test(n)) return 'Certificates';
+  return 'Other';
+}
+function normalize(grid){
+  if(!grid||!grid.length) return {docs:[],vessels:[]};
+  const head=grid[0].map(clean);
+  const docCols=[];
+  for(let i=4;i<head.length;i++) if(head[i]) docCols.push({idx:i,name:head[i],category:categoryFor(head[i])});
+  const vessels=[];
+  for(let r=1;r<grid.length;r++){
+    const row=grid[r]||[];
+    const name=clean(row[0]); if(!name) continue;
+    const qtyRaw=clean(row[3]);
+    const qty=typeof row[3]==='number'?row[3]:parseFloat(qtyRaw.replace(/[^0-9.]/g,''))||0;
+    const status={}; let received=0;
+    docCols.forEach(dc=>{
+      const v=clean(row[dc.idx]).toUpperCase();
+      const ok=v.includes('RECEIV');
+      status[dc.name]=ok; if(ok) received++;
+    });
+    const etaDate=parseEta(row[1]);
+    vessels.push({name,etaRaw:clean(row[1]),etaDate,product:clean(row[2])||'—',qty,status,received,
+      total:docCols.length,pending:docCols.length-received,
+      pct:docCols.length?received/docCols.length*100:0});
+  }
+  vessels.sort((a,b)=>(a.etaDate?a.etaDate.getTime():9e15)-(b.etaDate?b.etaDate.getTime():9e15));
+  vessels.forEach((v,i)=>v.color='var(--s'+(i%8+1)+')');
+  return {docs:docCols,vessels};
+}
+
+/* ---------- state + filtering ---------- */
+let DATA={docs:[],vessels:[]};
+let MODE='…';
+const $=id=>document.getElementById(id);
+function filtered(){
+  const days=$('etaFilter').value, vsel=$('vesselFilter').value;
+  return DATA.vessels.filter(v=>{
+    if(vsel!=='all'&&v.name!==vsel) return false;
+    if(days!=='all'){
+      if(!v.etaDate) return false;
+      const lim=Date.now()+(+days)*86400000;
+      if(v.etaDate.getTime()>lim) return false;
+    }
+    return true;
+  });
+}
+
+/* ---------- rendering helpers ---------- */
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtK=v=>v>=1000?(Math.round(v/100)/10)+'K':String(Math.round(v));
+const fmtNum=v=>v.toLocaleString('en-US');
+const pct1=v=>(Math.round(v*10)/10)+'%';
+function niceMax(v){
+  if(v<=0) return 10;
+  const u=Math.pow(10,Math.floor(Math.log10(v)));
+  for(const m of [1,1.5,2,2.5,3,4,5,6,8,10]) if(m*u>=v) return m*u;
+  return 10*u;
+}
+/* tooltip */
+const tip=$('tip');
+function bindTips(root){
+  root.querySelectorAll('[data-tip]').forEach(el=>{
+    el.addEventListener('mousemove',e=>{
+      tip.innerHTML=el.dataset.tip;
+      tip.style.opacity='1';
+      const w=tip.offsetWidth,h=tip.offsetHeight;
+      let x=e.clientX+14,y=e.clientY+14;
+      if(x+w>innerWidth-8)x=e.clientX-w-10;
+      if(y+h>innerHeight-8)y=e.clientY-h-10;
+      tip.style.left=x+'px';tip.style.top=y+'px';
+    });
+    el.addEventListener('mouseleave',()=>{tip.style.opacity='0';});
+  });
+}
+
+/* ---------- sections ---------- */
+function renderKPIs(f){
+  const nV=f.length;
+  const totDocs=f.reduce((s,v)=>s+v.total,0);
+  const recv=f.reduce((s,v)=>s+v.received,0);
+  const pend=totDocs-recv;
+  const recvPct=totDocs?recv/totDocs*100:0;
+  const avgPct=nV?f.reduce((s,v)=>s+v.pct,0)/nV:0;
+  const byProd={};
+  f.forEach(v=>byProd[v.product]=(byProd[v.product]||0)+1);
+  const prodTxt=Object.entries(byProd).map(([p,n])=>`${n} ${p} Vessel${n>1?'s':''}`).join(' · ')||'—';
+  const icons={
+    ship:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1s1.2 1 2.5 1c2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.9.94 5.34 2.81 7.76"/><path d="M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6"/><path d="M12 10v4"/><path d="M12 2v3"/></svg>',
+    check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>',
+    clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><circle cx="12" cy="14" r="4.5"/><path d="M12 12v2l1.5 1.5"/></svg>',
+    gauge:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>'
+  };
+  $('kpis').innerHTML=`
+  <div class="kpi"><div class="top">Vessels In Pipeline ${icons.ship}</div>
+    <div class="num">${nV}</div><div class="sub2">${esc(prodTxt)}</div></div>
+  <div class="kpi"><div class="top">Total Docs Received ${icons.check}</div>
+    <div class="num">${recv}</div><div class="sub pos">${pct1(recvPct)} Complete</div><div class="sub2">Across ${nV} vessel${nV===1?'':'s'}</div></div>
+  <div class="kpi"><div class="top">Total Docs Pending ${icons.clock}</div>
+    <div class="num">${pend}</div><div class="sub neg">${pct1(totDocs?pend/totDocs*100:0)} of docs · ${nV} vessel${nV===1?'':'s'}</div></div>
+  <div class="kpi"><div class="top">Avg Completion % ${icons.gauge}</div>
+    <div class="num">${pct1(avgPct)}</div><div class="sub neg">${recv}/${totDocs} docs</div><div class="sub2">${nV} vessel${nV===1?'':'s'}</div></div>`;
+}
+
+function renderHeatmap(f){
+  const hm=$('heatmap');
+  if(!f.length){hm.innerHTML='<div class="empty" style="grid-column:1/-1">No vessels match the current filters.</div>';hm.style.gridTemplateColumns='1fr';return;}
+  const docs=DATA.docs;
+  hm.style.gridTemplateColumns=`200px repeat(${docs.length},minmax(30px,1fr))`;
+  let html='<div></div>'+docs.map(d=>`<div class="colhead"><span>${esc(d.name)}</span></div>`).join('');
+  f.forEach(v=>{
+    html+=`<div class="rowlab"><b>${esc(v.name)} · ${esc(v.product)}</b><span>${v.etaDate?fmtDate(v.etaDate):esc(v.etaRaw)}</span></div>`;
+    docs.forEach(d=>{
+      const ok=v.status[d.name];
+      html+=`<div class="cell ${ok?'r':'p'}" data-tip="<b>${esc(v.name)}</b>${esc(d.name)}<br>${ok?'✓ Received':'– Pending'}">${ok?'✓':'–'}</div>`;
+    });
+  });
+  hm.innerHTML=html;
+  hm.style.minWidth=(200+docs.length*34)+'px';
+  bindTips(hm);
+}
+
+function renderCompletion(f){
+  const el=$('complChart');
+  if(!f.length){el.innerHTML='<div class="empty">No vessels match the current filters.</div>';return;}
+  const vs=[...f].sort((a,b)=>b.pct-a.pct);
+  const W=560,H=320,L=44,R=12,T=26,B=86;
+  const pw=W-L-R, ph=H-T-B;
+  const bw=Math.min(52,pw/vs.length*0.55);
+  let s=`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Bar chart of document completion percent by vessel">`;
+  for(let g=0;g<=4;g++){
+    const y=T+ph-ph*g/4;
+    s+=`<line class="gl" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"/><text class="tick" x="${L-6}" y="${y+3}" text-anchor="end">${g*25}%</text>`;
+  }
+  vs.forEach((v,i)=>{
+    const cx=L+pw*(i+0.5)/vs.length;
+    const h=Math.max(v.pct>0?3:0,ph*v.pct/100);
+    const y=T+ph-h;
+    s+=`<g data-tip="<b>${esc(v.name)}</b>${v.received}/${v.total} docs received · ${pct1(v.pct)}">`;
+    s+=`<rect x="${cx-bw/2}" y="${y}" width="${bw}" height="${h}" rx="4" fill="var(--accent)"/>`;
+    if(h<3) s+=`<line x1="${cx-bw/2}" x2="${cx+bw/2}" y1="${T+ph}" y2="${T+ph}" stroke="var(--muted)" stroke-width="2"/>`;
+    s+=`<text class="dlab" x="${cx}" y="${y-14}" text-anchor="middle">${pct1(v.pct)}</text>`;
+    s+=`<text class="dsub" x="${cx}" y="${y-4}" text-anchor="middle">(${v.received}/${v.total})</text>`;
+    s+=`<text x="${cx}" y="${T+ph+14}" text-anchor="end" transform="rotate(-28 ${cx} ${T+ph+14})">${esc(v.name)}</text></g>`;
+  });
+  s+=`<line class="ax" x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}"/></svg>`;
+  el.innerHTML=s; bindTips(el);
+}
+
+function renderQty(f){
+  const el=$('qtyChart'), lg=$('qtyLegend');
+  if(!f.length){el.innerHTML='<div class="empty">No vessels match the current filters.</div>';lg.innerHTML='';return;}
+  const prods=[...new Set(f.map(v=>v.product))];
+  const stacks=prods.map(p=>({p,vs:f.filter(v=>v.product===p),tot:f.filter(v=>v.product===p).reduce((s,v)=>s+v.qty,0)}));
+  const maxV=niceMax(Math.max(...stacks.map(s=>s.tot)));
+  const W=560,H=320,L=56,R=12,T=16,B=52;
+  const pw=W-L-R, ph=H-T-B;
+  const bw=Math.min(110,pw/prods.length*0.42);
+  let s=`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Stacked bar chart of incoming quantity in metric tons by product and vessel">`;
+  for(let g=0;g<=4;g++){
+    const y=T+ph-ph*g/4;
+    s+=`<line class="gl" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"/><text class="tick" x="${L-6}" y="${y+3}" text-anchor="end">${fmtK(maxV*g/4)}</text>`;
+  }
+  stacks.forEach((st,i)=>{
+    const cx=L+pw*(i+0.5)/prods.length;
+    let acc=0;
+    st.vs.forEach((v,j)=>{
+      const h=ph*v.qty/maxV;
+      const y=T+ph-ph*acc/maxV-h;
+      const first=j===0, last=j===st.vs.length-1;
+      s+=`<rect x="${cx-bw/2}" y="${y+(last?0:1)}" width="${bw}" height="${Math.max(0,h-(last?1:2)+(first?1:0))}" ${last?'rx="4"':''} fill="${v.color}" data-tip="<b>${esc(v.name)}</b>${esc(v.product)} · ${fmtNum(v.qty)} MT"/>`;
+      if(h>=30){
+        s+=`<text x="${cx}" y="${y+h/2-1}" text-anchor="middle" style="fill:#fff;font-weight:700;font-size:10.5px;paint-order:stroke;stroke:rgba(0,0,0,.45);stroke-width:2px;">${esc(v.name)}</text>`;
+        s+=`<text x="${cx}" y="${y+h/2+11}" text-anchor="middle" style="fill:#fff;font-weight:600;font-size:10px;paint-order:stroke;stroke:rgba(0,0,0,.45);stroke-width:2px;">${fmtK(v.qty)} MT</text>`;
+      }
+      acc+=v.qty;
+    });
+    s+=`<text class="dlab" x="${cx}" y="${T+ph-ph*acc/maxV-8}" text-anchor="middle">${fmtK(acc)}</text>`;
+    s+=`<text x="${cx}" y="${T+ph+18}" text-anchor="middle" style="font-weight:600;fill:var(--ink)">${esc(st.p)}</text>`;
+  });
+  s+=`<line class="ax" x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}"/>`;
+  s+=`<text x="${14}" y="${T+ph/2}" transform="rotate(-90 14 ${T+ph/2})" text-anchor="middle" class="tick">Quantity (MT)</text></svg>`;
+  el.innerHTML=s;
+  lg.innerHTML=f.map(v=>`<span class="it"><span class="sw" style="background:${v.color}"></span>${esc(v.name)}</span>`).join('');
+  bindTips(el);
+}
+
+function renderSummary(f){
+  const el=$('summaryTbl');
+  $('sumCount').textContent=f.length+' row'+(f.length===1?'':'s');
+  if(!f.length){el.innerHTML='<div class="empty">No vessels match the current filters.</div>';return;}
+  const recv=f.reduce((s,v)=>s+v.received,0), tot=f.reduce((s,v)=>s+v.total,0), qty=f.reduce((s,v)=>s+v.qty,0);
+  let h=`<table><thead><tr><th>Vessel</th><th>ETA to Mombasa</th><th>Product</th><th class="n">Quantity (MT)</th><th class="n">Docs Received</th><th class="n">Docs Pending</th><th class="n">Total Docs</th><th>Completion</th></tr></thead><tbody>`;
+  f.forEach(v=>{
+    h+=`<tr><td>${esc(v.name)}</td><td>${v.etaDate?fmtDate(v.etaDate):esc(v.etaRaw)}</td><td>${esc(v.product)}</td>
+    <td class="n">${fmtNum(v.qty)}</td><td class="n recv-n">${v.received}</td>
+    <td class="n"><span class="${v.pending>0?'pend-n':''}">${v.pending}</span></td><td class="n">${v.total}</td>
+    <td><span style="font-variant-numeric:tabular-nums">${pct1(v.pct)}</span><span class="meter"><i style="width:${v.pct}%"></i></span></td></tr>`;
+  });
+  h+=`<tr class="total"><td>Total / Avg</td><td></td><td></td><td class="n">${fmtNum(qty)}</td><td class="n">${recv}</td><td class="n">${tot-recv}</td><td class="n">${tot}</td><td>${pct1(tot?recv/tot*100:0)}</td></tr>`;
+  el.innerHTML=h+'</tbody></table>';
+}
+
+function renderDetail(f){
+  const el=$('detailTbl');
+  const rows=[];
+  f.forEach(v=>DATA.docs.forEach(d=>rows.push({v,d,ok:v.status[d.name]})));
+  $('detCount').textContent=rows.length+' row'+(rows.length===1?'':'s');
+  if(!rows.length){el.innerHTML='<div class="empty">No documents match the current filters.</div>';return;}
+  let h=`<table><thead><tr><th>Vessel</th><th>ETA to Mombasa</th><th>Product</th><th>Category</th><th>Document</th><th>Status</th></tr></thead><tbody>`;
+  rows.forEach(r=>{
+    h+=`<tr><td>${esc(r.v.name)}</td><td>${r.v.etaDate?fmtDate(r.v.etaDate):esc(r.v.etaRaw)}</td><td>${esc(r.v.product)}</td>
+    <td>${esc(r.d.category)}</td><td>${esc(r.d.name)}</td>
+    <td><span class="pill ${r.ok?'r':'p'}">${r.ok?'✓ Received':'– Pending'}</span></td></tr>`;
+  });
+  el.innerHTML=h+'</tbody></table>';
+}
+
+function renderAll(){
+  const f=filtered();
+  renderKPIs(f);renderHeatmap(f);renderCompletion(f);renderQty(f);renderSummary(f);renderDetail(f);
+}
+
+/* ---------- boot ---------- */
+function setState(mode,when){
+  MODE=mode;
+  const st=$('srcState'),txt=$('srcStateTxt');
+  st.classList.remove('live','snap');
+  if(mode==='live'){st.classList.add('live');txt.textContent='Live · synced '+when;}
+  else{st.classList.add('snap');txt.textContent='Snapshot · '+when;}
+  $('updatedAt').textContent=mode==='live'?('Last synced '+when+'.'):('Showing a snapshot from '+when+' — open this file in a regular browser for live data.');
+}
+function applyData(grid,mode,when){
+  const d=normalize(grid);
+  if(!d.vessels.length&&mode==='live') throw new Error('no rows');
+  DATA=d;
+  const vf=$('vesselFilter'),cur=vf.value;
+  vf.innerHTML='<option value="all">Vessel: All</option>'+d.vessels.map(v=>`<option${v.name===cur?' selected':''} value="${esc(v.name)}">${esc(v.name)}</option>`).join('');
+  setState(mode,when);
+  renderAll();
+}
+async function loadData(showSpin){
+  const btn=$('refreshBtn');
+  if(showSpin)btn.classList.add('spinning');
+  $('errBar').style.display='none';
+  const now=()=>new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+  try{
+    let grid;
+    try{ grid=await loadViaFetch(); }
+    catch(e){ grid=await loadViaJSONP(); }
+    applyData(grid,'live',now());
+  }catch(e){
+    if(DATA.vessels.length){
+      $('errBar').style.display='block';
+      $('errBar').textContent='Could not reach the Google Sheet just now — showing the last loaded data. Check your connection and press Refresh.';
+    }else{
+      applyData(parseCSV(SNAPSHOT_CSV),'snapshot',SNAPSHOT_TIME);
+    }
+  }finally{
+    btn.classList.remove('spinning');
+  }
+}
+$('srcLink').href=SHEET_URL; $('srcLink2').href=SHEET_URL;
+$('etaFilter').addEventListener('change',renderAll);
+$('vesselFilter').addEventListener('change',renderAll);
+$('refreshBtn').addEventListener('click',()=>loadData(true));
+let SERVER_DATA=null; /*__SERVER_DATA__*/
+try{
+  if(SERVER_DATA&&SERVER_DATA.grid&&SERVER_DATA.grid.length>1) applyData(SERVER_DATA.grid,'live',SERVER_DATA.fetchedAt);
+  else applyData(parseCSV(SNAPSHOT_CSV),'snapshot',SNAPSHOT_TIME);
+}catch(e){ applyData(parseCSV(SNAPSHOT_CSV),'snapshot',SNAPSHOT_TIME); }
+loadData(false);
+setInterval(()=>loadData(false),REFRESH_MS);
+</script>
