@@ -77,8 +77,8 @@ select{appearance:none;-webkit-appearance:none;border:1px solid var(--hairline);
 .hm .rowlab{display:flex;flex-direction:column;justify-content:center;padding-right:10px;min-width:0;}
 .hm .rowlab b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .hm .rowlab span{font-size:11px;color:var(--muted);white-space:nowrap;}
-.hm .colhead{position:relative;height:112px;}
-.hm .colhead span{position:absolute;bottom:4px;left:50%;transform:rotate(-46deg);transform-origin:left bottom;
+.hm .colhead{position:relative;height:132px;}
+.hm .colhead span{position:absolute;top:4px;left:50%;transform:rotate(46deg);transform-origin:left top;
   white-space:nowrap;font-size:11px;color:var(--ink-2);}
 .hm .cell{height:30px;border-radius:4px;display:flex;align-items:center;justify-content:center;
   color:#fff;font-size:11px;font-weight:700;cursor:default;}
@@ -126,9 +126,6 @@ footer.note a{color:var(--accent);}
       <p class="lede">Track shipping document completion status for inbound vessels to Mombasa, monitor received vs pending documents, and identify bottlenecks across the required document types.</p>
     </div>
     <div class="toolbtns">
-      <a class="btn" id="srcLink" target="_blank" rel="noopener" href="#">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
-        Source Sheet</a>
       <button class="btn" id="refreshBtn" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
         Refresh</button>
@@ -185,7 +182,6 @@ footer.note a{color:var(--accent);}
     <div class="tblwrap detailwrap" id="detailTbl"></div>
   </section>
 
-  <footer class="note">Data is read live from the <a id="srcLink2" target="_blank" rel="noopener" href="#">Google Sheet</a> each time this page opens, and re-checked every 5 minutes while it stays open. <span id="updatedAt"></span></footer>
 </div>
 <div id="tip" role="tooltip"></div>
 
@@ -385,7 +381,7 @@ function renderHeatmap(f){
   if(!f.length){hm.innerHTML='<div class="empty" style="grid-column:1/-1">No vessels match the current filters.</div>';hm.style.gridTemplateColumns='1fr';return;}
   const docs=DATA.docs;
   hm.style.gridTemplateColumns=`200px repeat(${docs.length},minmax(30px,1fr))`;
-  let html='<div></div>'+docs.map(d=>`<div class="colhead"><span>${esc(d.name)}</span></div>`).join('');
+  let html='';
   f.forEach(v=>{
     html+=`<div class="rowlab"><b>${esc(v.name)} · ${esc(v.product)}</b><span>${v.etaDate?fmtDate(v.etaDate):esc(v.etaRaw)}</span></div>`;
     docs.forEach(d=>{
@@ -393,6 +389,7 @@ function renderHeatmap(f){
       html+=`<div class="cell ${ok?'r':'p'}" data-tip="<b>${esc(v.name)}</b>${esc(d.name)}<br>${ok?'✓ Received':'– Pending'}">${ok?'✓':'–'}</div>`;
     });
   });
+  html+='<div></div>'+docs.map(d=>`<div class="colhead"><span>${esc(d.name)}</span></div>`).join('');
   hm.innerHTML=html;
   hm.style.minWidth=(200+docs.length*34)+'px';
   bindTips(hm);
@@ -506,7 +503,6 @@ function setState(mode,when){
   st.classList.remove('live','snap');
   if(mode==='live'){st.classList.add('live');txt.textContent='Live · synced '+when;}
   else{st.classList.add('snap');txt.textContent='Snapshot · '+when;}
-  $('updatedAt').textContent=mode==='live'?('Last synced '+when+'.'):('Showing a snapshot from '+when+' — open this file in a regular browser for live data.');
 }
 function applyData(grid,mode,when){
   const d=normalize(grid);
@@ -538,7 +534,6 @@ async function loadData(showSpin){
     btn.classList.remove('spinning');
   }
 }
-$('srcLink').href=SHEET_URL; $('srcLink2').href=SHEET_URL;
 $('etaFilter').addEventListener('change',renderAll);
 $('vesselFilter').addEventListener('change',renderAll);
 $('refreshBtn').addEventListener('click',()=>loadData(true));
